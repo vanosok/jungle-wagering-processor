@@ -30,25 +30,30 @@ export interface TransactionState {
   processedAt?: Date;
 }
 
+/** Shared by boundary validation and construction; business rules live in the domain. */
+export function assertTransactionInput({
+  kind,
+  money,
+  referenceExternalTransactionId,
+}: Pick<TransactionState, 'kind' | 'money' | 'referenceExternalTransactionId'>): void {
+  if ((kind === 'REFUND' || kind === 'ROLLBACK') && !referenceExternalTransactionId) {
+    throw new DomainError('INVALID_INPUT', 'Reversals require an external reference');
+  }
+  if ((kind === 'BET' || kind === 'LOSS' || kind === 'OPENING') && referenceExternalTransactionId) {
+    throw new DomainError('INVALID_INPUT', 'This operation does not accept a reference');
+  }
+  if (money.isNegative() || (kind !== 'LOSS' && !money.isPositive())) {
+    throw new DomainError('INVALID_INPUT', 'Financial movements must be strictly positive');
+  }
+}
+
 export class WagerTransaction {
   private constructor(private readonly state: TransactionState) {}
 
   static create(
     props: Omit<TransactionState, 'status' | 'failureCode' | 'processedAt'>,
   ): WagerTransaction {
-    const { kind, money, referenceExternalTransactionId } = props;
-    if ((kind === 'REFUND' || kind === 'ROLLBACK') && !referenceExternalTransactionId) {
-      throw new DomainError('INVALID_INPUT', 'Reversals require an external reference');
-    }
-    if (
-      (kind === 'BET' || kind === 'LOSS' || kind === 'OPENING') &&
-      referenceExternalTransactionId
-    ) {
-      throw new DomainError('INVALID_INPUT', 'This operation does not accept a reference');
-    }
-    if (money.isNegative() || (kind !== 'LOSS' && !money.isPositive())) {
-      throw new DomainError('INVALID_INPUT', 'Financial movements must be strictly positive');
-    }
+    assertTransactionInput(props);
     return new WagerTransaction({ ...props, status: 'PENDING' });
   }
 
@@ -147,7 +152,7 @@ export class WagerTransaction {
     return reference.kind === 'BET' ? 'CREDIT' : 'DEBIT';
   }
 
-  validateReference(reference: WagerTransaction): void {
+  validateReferenceContext(reference: WagerTransaction): void {
     if (
       this.providerId !== reference.providerId ||
       this.playerId !== reference.playerId ||
@@ -157,6 +162,10 @@ export class WagerTransaction {
     ) {
       throw new DomainError('INVALID_REFERENCE', 'Reference belongs to another financial context');
     }
+  }
+
+  validateReference(reference: WagerTransaction): void {
+    this.validateReferenceContext(reference);
     const allowed = this.kind === 'ROLLBACK' ? ['BET', 'WIN', 'REFUND'] : ['BET'];
     if (!allowed.includes(reference.kind)) {
       throw new DomainError('INVALID_REFERENCE', 'Reference kind is not allowed');

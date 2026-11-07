@@ -4,6 +4,8 @@
 
 `src/domain` contains framework-free classes with private constructors, explicit factories and terminal state transitions. `src/application` coordinates the use cases against `FinancialStore` / `FinancialSession` ports. PostgreSQL, SQS, observability and HTTP are adapters. HTTP and SQS both call `WageringService.submit`.
 
+Input rules and reference-context validation are defined once in the domain and reused by the application boundary and entity factories. Ledger factories defensively copy their input state, including timestamps, so caller-owned objects cannot mutate an existing ledger snapshot. Type checking also rejects unused locals and parameters.
+
 ## Money
 
 `Money` is immutable and represents minor units with `bigint`, with no conversion through JavaScript `number`. API and event values are fixed-scale decimal strings. PostgreSQL stores exact `NUMERIC(20,2)` values; MikroORM maps them as strings and rehydrates through `Money`. Out-of-range arithmetic is rejected, never rounded. Currency is explicit and checked in all arithmetic. The challenge uses two decimal places for all supported ISO currencies; this is a deliberate simplification, not a general-purpose ISO currency scale engine.

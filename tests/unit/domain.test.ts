@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { DomainError, InvalidTransactionStateError } from '../../src/domain/errors';
 import { WalletBalanceChanged } from '../../src/domain/events';
-import { WalletLedgerEntry } from '../../src/domain/ledger';
+import { type LedgerEntryState, WalletLedgerEntry } from '../../src/domain/ledger';
 import { InboxMessage, OutboxMessage } from '../../src/domain/messages';
 import { Money } from '../../src/domain/money';
 import { type TransactionKind, WagerTransaction } from '../../src/domain/transaction';
@@ -66,6 +66,33 @@ describe('Money', () => {
 });
 
 describe('Wallet and ledger', () => {
+  test('ledger snapshots cannot be changed through caller-owned state or dates', () => {
+    for (const factory of [WalletLedgerEntry.create, WalletLedgerEntry.rehydrate]) {
+      const input: LedgerEntryState = {
+        id: 'entry',
+        walletId: 'wallet',
+        transactionId: 'tx',
+        direction: 'CREDIT',
+        money: brl('1.00'),
+        balanceBefore: brl('0.00'),
+        balanceAfter: brl('1.00'),
+        walletVersion: 1,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      };
+      const entry = factory(input);
+      input.createdAt.setUTCFullYear(1999);
+      expect(entry.createdAt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+      input.walletId = 'another-wallet';
+      input.direction = 'DEBIT';
+      input.money = brl('2.00');
+      entry.createdAt.setUTCFullYear(2000);
+      expect(entry.walletId).toBe('wallet');
+      expect(entry.direction).toBe('CREDIT');
+      expect(entry.money.toString()).toBe('1.00');
+      expect(entry.isBalanced()).toBe(true);
+      expect(entry.createdAt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    }
+  });
   test('each movement creates a balanced entry and advances version', () => {
     const wallet = Wallet.open({ id: 'wallet', playerId: 'player', initialBalance: brl('100.00') });
     expect(wallet.version).toBe(1);

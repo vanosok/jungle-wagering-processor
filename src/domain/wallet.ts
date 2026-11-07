@@ -21,7 +21,8 @@ export class Wallet {
     }
     const now = new Date();
     return new Wallet({
-      ...props,
+      id: props.id,
+      playerId: props.playerId,
       currency: props.initialBalance.currency,
       balance: props.initialBalance,
       version: 1,

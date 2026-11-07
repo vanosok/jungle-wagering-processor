@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../domain/errors';
 import { Money } from '../domain/money';
-import { publicKinds } from '../domain/transaction';
+import { assertTransactionInput, publicKinds } from '../domain/transaction';
 
 const identifier = z
   .string()
@@ -55,21 +55,10 @@ export function payloadHash(value: unknown): string {
 export function parseTransaction(value: unknown): TransactionInput {
   const parsed = transactionSchema.safeParse(value);
   if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Invalid transaction contract');
-  Money.from(parsed.data.money);
-  if (parsed.data.kind !== 'LOSS' && parsed.data.money.amount === '0.00') {
-    throw new DomainError('INVALID_INPUT', 'Financial movements must be strictly positive');
-  }
-  if (
-    (parsed.data.kind === 'REFUND' || parsed.data.kind === 'ROLLBACK') &&
-    !parsed.data.referenceExternalTransactionId
-  ) {
-    throw new DomainError('INVALID_INPUT', 'Reference required');
-  }
-  if (
-    (parsed.data.kind === 'BET' || parsed.data.kind === 'LOSS') &&
-    parsed.data.referenceExternalTransactionId
-  ) {
-    throw new DomainError('INVALID_INPUT', 'Reference is not allowed for this operation');
-  }
+  assertTransactionInput({
+    kind: parsed.data.kind,
+    money: Money.from(parsed.data.money),
+    referenceExternalTransactionId: parsed.data.referenceExternalTransactionId,
+  });
   return parsed.data;
 }

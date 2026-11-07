@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { DomainError } from '../domain/errors';
+import { DomainError, type FailureCode } from '../domain/errors';
 import {
   WagerTransactionFailed,
   WagerTransactionPendingReference,
@@ -19,7 +19,7 @@ export interface TransactionResult {
   status: TransactionStatus;
   balance: MoneyProps | null;
   idempotentReplay: boolean;
-  failureCode?: string;
+  failureCode?: FailureCode;
 }
 export function result(record: TransactionRecord, replay: boolean): TransactionResult {
   return {
@@ -238,15 +238,7 @@ export class WageringService {
         );
         reference = referenced?.transaction;
         // Validate identity before deciding whether a reference is merely not ready.
-        if (
-          reference &&
-          (reference.walletId !== transaction.walletId ||
-            reference.playerId !== transaction.playerId ||
-            reference.roundId !== transaction.roundId ||
-            reference.money.currency !== transaction.money.currency)
-        ) {
-          throw new DomainError('INVALID_REFERENCE', 'Reference context differs');
-        }
+        if (reference) transaction.validateReferenceContext(reference);
         if (!reference || !reference.isTerminal()) {
           if (record.attempts >= config.REFERENCE_MAX_ATTEMPTS) {
             throw new DomainError(

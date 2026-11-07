@@ -15,8 +15,10 @@ export interface LedgerEntryState {
 }
 
 export class WalletLedgerEntry {
-  private constructor(private readonly state: Readonly<LedgerEntryState>) {
-    Object.freeze(state);
+  private readonly state: Readonly<LedgerEntryState>;
+
+  private constructor(state: LedgerEntryState) {
+    this.state = Object.freeze({ ...state, createdAt: new Date(state.createdAt) });
     Object.freeze(this);
   }
 
