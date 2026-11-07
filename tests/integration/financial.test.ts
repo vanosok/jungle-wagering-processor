@@ -96,6 +96,40 @@ describe('PostgreSQL financial guarantees', () => {
       );
     expect(count?.count).toBe('1');
   });
+  test('a locked wallet does not block a distinct wallet', async () => {
+    const a = await wallet();
+    const b = await wallet();
+    const locker = db.em.fork();
+    await locker.begin();
+    await locker.execute('select id from wallets where id = ? for update', [a.id]);
+    const blocked = service.submit(bet(a), crypto.randomUUID(), ctx);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const deadline = Date.now() + 2000;
+      let waiting = false;
+      do {
+        const [row] = await db.em.fork().execute<{ waiting: boolean }[]>(`select exists (
+          select 1 from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'
+          and query like '%wallets%') as waiting`);
+        waiting = row?.waiting ?? false;
+        if (!waiting) await Bun.sleep(10);
+      } while (!waiting && Date.now() < deadline);
+      expect(waiting).toBe(true);
+      const independent = await Promise.race([
+        service.submit(bet(b), crypto.randomUUID(), ctx),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Independent wallet blocked')), 1500);
+        }),
+      ]);
+      expect(independent.status).toBe('PROCESSED');
+    } finally {
+      if (timer) clearTimeout(timer);
+      await locker.rollback();
+      await blocked;
+    }
+    expect(await consistent(a.id)).toBe('90.00');
+    expect(await consistent(b.id)).toBe('90.00');
+  });
   test('idempotency divergence and external identity conflicts are rejected', async () => {
     const w = await wallet();
     const data = bet(w);
@@ -209,11 +243,14 @@ describe('PostgreSQL financial guarantees', () => {
     const data = bet(w);
     const key = crypto.randomUUID();
     const delegate = new PostgresFinancialStore(db);
+    let attemptedTransactionId: string | undefined;
+    const messageId = crypto.randomUUID();
     const crashingStore: FinancialStore = {
       atomic: (work) =>
         delegate.atomic(async (session) => {
           const value = await work(session);
-          void value;
+          if (value && typeof value === 'object' && 'transactionId' in value)
+            attemptedTransactionId = String(value.transactionId);
           throw new Error('injected-before-commit');
         }),
     };
@@ -222,7 +259,7 @@ describe('PostgreSQL financial guarantees', () => {
       await rejected(
         crashing.submit(data, key, {
           ...ctx,
-          inbox: { consumerName: 'crash', messageId: crypto.randomUUID(), payloadHash: 'hash' },
+          inbox: { consumerName: 'crash', messageId, payloadHash: 'hash' },
         }),
       ),
     ).toMatchObject({ message: 'injected-before-commit' });
@@ -233,6 +270,17 @@ describe('PostgreSQL financial guarantees', () => {
         [key],
       );
     expect(row?.count).toBe('0');
+    expect(attemptedTransactionId).toBeDefined();
+    const [effects] = await db.em
+      .fork()
+      .execute<{ ledger: string; inbox: string; outbox: string }[]>(
+        `
+      SELECT (SELECT count(*)::text FROM wallet_ledger WHERE transaction_id = ?) AS ledger,
+        (SELECT count(*)::text FROM inbox WHERE message_id = ?) AS inbox,
+        (SELECT count(*)::text FROM outbox WHERE payload->'data'->>'transactionId' = ?) AS outbox`,
+        [attemptedTransactionId, messageId, attemptedTransactionId],
+      );
+    expect(effects).toEqual({ ledger: '0', inbox: '0', outbox: '0' });
     expect(await consistent(w.id)).toBe('100.00');
   });
   test('schema rejects direct negative balances, ledger edits and unpaired financial writes', async () => {
@@ -258,6 +306,16 @@ describe('PostgreSQL financial guarantees', () => {
     ).toBeInstanceOf(Error);
     expect(
       await rejected(db.em.fork().execute('delete from wallet_ledger where wallet_id = ?', [w.id])),
+    ).toBeInstanceOf(Error);
+    expect(await rejected(db.em.fork().execute('truncate table wallet_ledger'))).toBeInstanceOf(
+      Error,
+    );
+    expect(
+      await rejected(
+        db.em
+          .fork()
+          .execute("update outbox set payload = '{}'::jsonb where aggregate_id = ?", [w.id]),
+      ),
     ).toBeInstanceOf(Error);
     expect(
       await rejected(

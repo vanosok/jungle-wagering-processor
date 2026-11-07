@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { DomainError } from '../domain/errors';
 import {
+  WagerTransactionFailed,
   WagerTransactionPendingReference,
   WagerTransactionProcessed,
   WagerTransactionRejected,
@@ -93,6 +94,23 @@ export class WageringService {
   }
 
   async submit(input: unknown, key: string, ctx: RequestContext): Promise<TransactionResult> {
+    return this.accept(input, key, ctx, false);
+  }
+
+  async recordPermanentFailure(
+    input: unknown,
+    key: string,
+    ctx: RequestContext,
+  ): Promise<TransactionResult> {
+    return this.accept(input, key, ctx, true);
+  }
+
+  private async accept(
+    input: unknown,
+    key: string,
+    ctx: RequestContext,
+    permanentFailure: boolean,
+  ): Promise<TransactionResult> {
     const data = parseTransaction(input);
     if (!keySchema.safeParse(key).success)
       throw new DomainError('INVALID_INPUT', 'Valid Idempotency-Key required');
@@ -152,7 +170,19 @@ export class WageringService {
         nextAttemptAt: null,
         correlationId: ctx.correlationId,
       };
-      await this.apply(session, record, ctx);
+      if (permanentFailure) {
+        const wallet = await session.wallet(transaction.walletId, true);
+        if (
+          wallet &&
+          wallet.currency === transaction.money.currency &&
+          wallet.playerId === transaction.playerId
+        ) {
+          record.resultBalance = wallet.balance;
+        }
+        transaction.fail('INFRASTRUCTURE_FAILURE');
+        await session.saveTransaction(record);
+        session.enqueue(WagerTransactionFailed.from(transaction, ctx));
+      } else await this.apply(session, record, ctx);
       this.completeInbox(session, ctx, transaction.id);
       return result(record, false);
     });
@@ -171,7 +201,7 @@ export class WageringService {
       if (
         !record ||
         record.transaction.status !== 'PENDING_REFERENCE' ||
-        (record.nextAttemptAt && record.nextAttemptAt > new Date())
+        (record.nextAttemptAt && record.nextAttemptAt > (await session.now()))
       )
         return false;
       record.attempts += 1;
@@ -226,7 +256,7 @@ export class WageringService {
           }
           transaction.markPendingReference();
           record.nextAttemptAt = new Date(
-            Date.now() +
+            (await session.now()).getTime() +
               Math.min(
                 config.REFERENCE_MAX_DELAY_MS,
                 config.REFERENCE_BASE_DELAY_MS * 2 ** Math.min(record.attempts, 20),

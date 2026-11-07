@@ -16,6 +16,7 @@ export interface InboxRecord {
   transactionId: string;
 }
 export interface FinancialSession {
+  now(): Promise<Date>;
   lockKeys(keys: string[]): Promise<void>;
   wallet(id: string, lock?: boolean): Promise<Wallet | null>;
   insertWallet(wallet: Wallet): void;

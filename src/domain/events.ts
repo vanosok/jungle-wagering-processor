@@ -100,6 +100,13 @@ export class WagerTransactionRejected extends IntegrationEvent<TransactionEventD
     return new WagerTransactionRejected(transactionProps(tx, ctx));
   }
 }
+export class WagerTransactionFailed extends IntegrationEvent<TransactionEventData> {
+  readonly eventType = 'WagerTransactionFailed';
+  readonly version = 1;
+  static from(tx: WagerTransaction, ctx: EventContext) {
+    return new WagerTransactionFailed(transactionProps(tx, ctx));
+  }
+}
 export class WagerTransactionPendingReference extends IntegrationEvent<TransactionEventData> {
   readonly eventType = 'WagerTransactionPendingReference';
   readonly version = 1;

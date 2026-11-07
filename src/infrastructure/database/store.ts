@@ -38,7 +38,15 @@ export function toWallet(row: WalletRow): Wallet {
 }
 
 class Session implements FinancialSession {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly databaseTime: Date,
+  ) {}
+  async now(): Promise<Date> {
+    const [row] = await this.em.execute<{ now: Date }[]>('select clock_timestamp() as now');
+    if (!row) throw new Error('Database clock unavailable');
+    return new Date(row.now);
+  }
   async lockKeys(keys: string[]): Promise<void> {
     for (const key of [...new Set(keys)].sort()) {
       await this.em.execute('select pg_advisory_xact_lock(hashtextextended(?, 0))', [key]);
@@ -147,7 +155,7 @@ class Session implements FinancialSession {
         payload: event.toJSON(),
         occurredAt: event.occurredAt,
         attempts: message.attempts,
-        nextAttemptAt: message.nextAttemptAt,
+        nextAttemptAt: this.databaseTime,
         publishedAt: null,
         leaseOwner: null,
         leaseUntil: null,
@@ -190,10 +198,15 @@ export class PostgresFinancialStore implements FinancialStore {
   async atomic<T>(work: (session: FinancialSession) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.db.em.fork().transactional((em) => work(new Session(em)));
+        return await this.db.em.fork().transactional(async (em) => {
+          const [clock] = await em.execute<{ now: Date }[]>('select clock_timestamp() as now');
+          if (!clock) throw new Error('Database clock unavailable');
+          return work(new Session(em, new Date(clock.now)));
+        });
       } catch (error) {
-        if (!['40P01', '40001', '55P03'].includes(errorCode(error)) || attempt >= 2) throw error;
+        if (!['40P01', '40001', '55P03'].includes(errorCode(error))) throw error;
         metrics.lockConflicts.inc();
+        if (attempt >= 2) throw error;
         await Bun.sleep(20 * 2 ** attempt + Math.floor(Math.random() * 20));
       }
     }

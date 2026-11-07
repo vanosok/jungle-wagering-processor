@@ -1,0 +1,55 @@
+name: jungle-wagering
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: wager
+      POSTGRES_PASSWORD: wager
+      POSTGRES_DB: wagering
+    ports: ['127.0.0.1:5432:5432']
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wager -d wagering']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  localstack:
+    image: localstack/localstack:4.10.0
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: us-east-1
+      SQS_ENDPOINT_STRATEGY: dynamic
+    ports: ['127.0.0.1:4566:4566']
+    healthcheck:
+      test: ['CMD', 'awslocal', 'sqs', 'list-queues']
+      interval: 3s
+      timeout: 5s
+      retries: 40
+  init:
+    build: .
+    command: ['sh', '-c', 'bun run db:migrate && bun run queues:init']
+    environment: &app-env
+      DATABASE_URL: postgresql://wager:wager@postgres:5432/wagering
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    depends_on:
+      postgres: { condition: service_healthy }
+      localstack: { condition: service_healthy }
+  app:
+    build: .
+    environment:
+      <<: *app-env
+      PORT: 3000
+    ports: ['127.0.0.1:3000-3009:3000']
+    depends_on:
+      init: { condition: service_completed_successfully }
+    stop_grace_period: 40s
+    healthcheck:
+      test: ['CMD', 'bun', '-e', "if (!(await fetch('http://localhost:3000/health/ready')).ok) process.exit(1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  postgres-data:
