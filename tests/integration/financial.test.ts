@@ -105,7 +105,7 @@ describe('PostgreSQL financial guarantees', () => {
     const blocked = service.submit(bet(a), crypto.randomUUID(), ctx);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const deadline = Date.now() + 2000;
+      const deadline = performance.now() + 2000;
       let waiting = false;
       do {
         const [row] = await db.em.fork().execute<{ waiting: boolean }[]>(`select exists (
@@ -113,7 +113,7 @@ describe('PostgreSQL financial guarantees', () => {
           and query like '%wallets%') as waiting`);
         waiting = row?.waiting ?? false;
         if (!waiting) await Bun.sleep(10);
-      } while (!waiting && Date.now() < deadline);
+      } while (!waiting && performance.now() < deadline);
       expect(waiting).toBe(true);
       const independent = await Promise.race([
         service.submit(bet(b), crypto.randomUUID(), ctx),

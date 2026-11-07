@@ -15,13 +15,13 @@ async function start(): Promise<Child> {
   });
   const reader = child.stdout.getReader();
   let output = '';
-  const deadline = Date.now() + 30000;
-  while (Date.now() < deadline) {
+  const deadline = performance.now() + 30000;
+  while (performance.now() < deadline) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const next = await Promise.race([
       reader.read(),
       new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), Math.max(1, deadline - Date.now()));
+        timer = setTimeout(() => resolve(null), Math.max(1, deadline - performance.now()));
       }),
     ]);
     if (timer) clearTimeout(timer);

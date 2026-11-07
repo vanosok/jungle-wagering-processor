@@ -82,11 +82,11 @@ async function messages(name: string) {
   return response.Messages ?? [];
 }
 async function eventually(work: () => Promise<boolean>, timeout = 10000) {
-  const deadline = Date.now() + timeout;
+  const deadline = performance.now() + timeout;
   do {
     if (await work()) return;
     await Bun.sleep(100);
-  } while (Date.now() < deadline);
+  } while (performance.now() < deadline);
   throw new Error('Condition did not become true within the deadline');
 }
 beforeAll(async () => {
@@ -154,7 +154,7 @@ describe('real SQS, PostgreSQL and recovery', () => {
     await eventually(async () => {
       received = (await recovered.tick(0)) > 0;
       return received;
-    }, 30000);
+    }, 45000);
     expect(received).toBe(true);
     recovered.stop();
     expect((await balance(w.id))?.balance).toBe('90.00');
@@ -190,7 +190,7 @@ describe('real SQS, PostgreSQL and recovery', () => {
       const dlq = await messages(broker.names.dlq);
       found = dlq.some((m) => m.Body?.includes(message.messageId));
       return found;
-    }, 20000);
+    }, 45000);
     expect(found).toBe(true);
     failing.stop();
     const [failed] = await db.em

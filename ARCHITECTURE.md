@@ -100,3 +100,5 @@ Pending-reference acceptance is not a failure. A terminal rejection must not be 
 ## Verification
 
 `bun run test:all` runs strict type checking, lint, domain tests and real-container integration tests. The integration runner provisions a fresh database and queue namespace, exercises both migrations in both directions, and cleans only its resources. Three real Bun/NestJS processes handle the same wallet, a worker is killed with SIGKILL at the post-commit/pre-ack boundary, and concurrent publishers use real SQS. Failure injection covers rollback before commit and the uncertain publish/mark window. Mocked financial databases/brokers do not replace the integration environment; adapters are wrapped only to inject targeted failures while the real database and SQS remain in use.
+
+Test wait deadlines use monotonic `performance.now()` so host/VM wall-clock corrections cannot prematurely end recovery assertions. Persisted production schedules independently use the PostgreSQL clock.
