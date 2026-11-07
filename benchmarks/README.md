@@ -19,8 +19,8 @@ Relatórios reais preservados: [carteiras distribuídas](distributed-600-12.json
 
 | Cenário | Duração | Req/s | p50 | p95 | p99 | Erros HTTP/rede | Divergências |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| 12 carteiras | 4,23 s | 141,85 | 77,65 ms | 151,91 ms | 183,05 ms | 0 / 600 | 0 |
-| Uma hot wallet | 9,72 s | 61,71 | 71,23 ms | 599,85 ms | 743,24 ms | 0 / 600 | 0 |
+| 12 carteiras | 3,01 s | 199,20 | 54,62 ms | 105,26 ms | 130,17 ms | 0 / 600 | 0 |
+| Uma hot wallet | 9,62 s | 62,37 | 67,97 ms | 589,98 ms | 756,75 ms | 0 / 600 | 0 |
 
 Os dois cenários tiveram 59 replays, exatamente 541 efeitos únicos e zero timeouts/deadlocks contabilizados como conflitos de lock. Isso **não** significa ausência de espera por lock: requisições podem aguardar a mesma wallet sem atingir o timeout.
 
@@ -28,11 +28,11 @@ No cenário distribuído foram reconciliados 553 movimentos, incluindo 12 abertu
 
 | Métrica | Distribuído | Hot wallet |
 |---|---:|---:|
-| Maior lag nas amostras anteriores à carga | 0,118 s | 2,104 s |
-| Maior lag nas amostras posteriores à carga | 1,374 s | 0,116 s |
+| Maior lag nas amostras anteriores à carga | 0,093 s | 0,000 s |
+| Maior lag nas amostras posteriores à carga | 1,776 s | 0,141 s |
 | Conflitos de lock novos | 0 | 0 |
 
-Lag é amostrado por réplica antes/depois da carga e não é um pico medido continuamente nem uma latência de entrega ao consumidor. Os cenários rodaram sequencialmente e o hot começou com backlog da execução anterior. O tempo de publicação assíncrona não está incluído na latência HTTP.
+Lag é amostrado por réplica antes/depois da carga e não é um pico medido continuamente nem uma latência de entrega ao consumidor. Os cenários rodaram sequencialmente; nesta execução, as amostras anteriores ao hot indicavam lag zero. O tempo de publicação assíncrona não está incluído na latência HTTP.
 
 ## Interpretação e limites
 

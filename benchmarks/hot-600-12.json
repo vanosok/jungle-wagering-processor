@@ -1,6 +1,6 @@
 {
-  "runId": "7599b921-0fbc-46e5-ba9d-5baa82f0928f",
-  "startedAt": "2026-11-07T16:34:58.817Z",
+  "runId": "70719008-9ec8-47b9-96e5-837b3cad9f44",
+  "startedAt": "2026-11-07T17:51:56.271Z",
   "environment": {
     "runtime": "Bun 1.3.11",
     "os": "win32 10.0.26200",
@@ -16,7 +16,7 @@
     "note": "Local synthetic closed-loop workload; results depend on Docker resources and instrumentation. No production capacity claim."
   },
   "methodology": {
-    "urls": ["http://localhost:3002", "http://localhost:3003", "http://localhost:3004"],
+    "urls": ["http://127.0.0.1:3002", "http://127.0.0.1:3003", "http://127.0.0.1:3004"],
     "requests": 600,
     "concurrency": 12,
     "wallets": 12,
@@ -36,63 +36,63 @@
     "requests": 600,
     "uniqueExpected": 541,
     "replays": 59,
-    "durationSeconds": 9.7232791,
-    "requestsPerSecond": 61.70757764219687,
+    "durationSeconds": 9.6204125,
+    "requestsPerSecond": 62.36738809276629,
     "errors": 0,
     "errorRate": 0,
     "latencyMs": {
-      "p50": 71.23090000000002,
-      "p95": 599.8543999999999,
-      "p99": 743.2430000000004,
-      "max": 910.5805999999993
+      "p50": 67.96929999999975,
+      "p95": 589.9834999999998,
+      "p99": 756.7489999999998,
+      "max": 841.2257
     },
     "statusCounts": {
       "200": 600
     },
     "metricsBefore": [
       {
-        "url": "http://localhost:3002",
+        "url": "http://127.0.0.1:3002",
         "available": true,
         "lockConflicts": 0,
-        "outboxLagSeconds": 2.104395
+        "outboxLagSeconds": 0
       },
       {
-        "url": "http://localhost:3003",
+        "url": "http://127.0.0.1:3003",
         "available": true,
         "lockConflicts": 0,
-        "outboxLagSeconds": 2.049351
+        "outboxLagSeconds": 0
       },
       {
-        "url": "http://localhost:3004",
+        "url": "http://127.0.0.1:3004",
         "available": true,
         "lockConflicts": 0,
-        "outboxLagSeconds": 2.049353
+        "outboxLagSeconds": 0
       }
     ],
     "metricsAfter": [
       {
-        "url": "http://localhost:3002",
+        "url": "http://127.0.0.1:3002",
         "available": true,
         "lockConflicts": 0,
-        "outboxLagSeconds": 0.017348
+        "outboxLagSeconds": 0.141337
       },
       {
-        "url": "http://localhost:3003",
+        "url": "http://127.0.0.1:3003",
         "available": true,
         "lockConflicts": 0,
-        "outboxLagSeconds": 0.073939
+        "outboxLagSeconds": 0.095733
       },
       {
-        "url": "http://localhost:3004",
+        "url": "http://127.0.0.1:3004",
         "available": true,
         "lockConflicts": 0,
-        "outboxLagSeconds": 0.115951
+        "outboxLagSeconds": 0.09419
       }
     ],
     "lockConflictsDuringRun": 0,
     "reconciliations": [
       {
-        "walletId": "40065118-6256-49be-a73b-f02f7719d862",
+        "walletId": "2ea7406c-2418-4f5a-ae53-d2e26c34ad89",
         "consistent": true,
         "checkedEntries": 542,
         "checkedPostings": 1084
