@@ -159,3 +159,51 @@ Eventos: `WagerTransactionProcessed` (inclui LOSS), `WagerTransactionRejected`, 
 Logs da aplicação são JSON com contexto e sem payload financeiro completo. Métricas incluem resultados por status, duplicatas, retries, DLQ, conflitos de lock, atraso da outbox, latência e divergência de reconciliação. Contadores são locais ao processo: configure coleta por instância. Divergências são sinalizadas e nunca corrigidas silenciosamente.
 
 Autenticação foi deixada como ponto de extensão explícito e não está ativa. As decisões sobre locks, idempotência, referências, shutdown, retenção e limitações estão em [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Diferenciais implementados
+
+| Diferencial do enunciado | Evidência |
+|---|---|
+| Partidas dobradas | Dois postings imutáveis por movimento; validação SQL diferida e reconciliação de débitos/créditos |
+| OpenTelemetry | Contexto W3C atravessa HTTP, transação financeira, outbox e consumidor SQS; exportação OTLP para Jaeger |
+| Dashboard | Grafana provisionado com 10 painéis, Prometheus descobrindo cada réplica por DNS |
+| Teste de carga | Runner Bun, cenários distribuído/hot wallet, relatórios reais de latência, throughput, erros e consistência |
+
+### Dashboard e traces
+
+```sh
+docker compose -f compose.yaml -f compose.observability.yaml up -d --build --scale app=3 --wait
+```
+
+- Grafana: [localhost:3300/d/jungle-wagering](http://localhost:3300/d/jungle-wagering). Login local: `admin` / `local-grafana`.
+- Jaeger: [localhost:16686](http://localhost:16686), serviço `jungle-wagering`.
+- Prometheus: [localhost:9090](http://localhost:9090).
+
+O dashboard mostra resultados, p50/p95/p99, duplicatas, retries, DLQ, conflitos de lock, outbox lag, divergências, disponibilidade de coleta e memória. Gere tráfego com `demo` ou `test:load` para preencher os gráficos. Credenciais são apenas para esta demonstração em loopback; não há dependência de contas externas.
+
+Para verificar a configuração e um trace real de ponta a ponta:
+
+```sh
+bun run observability:verify
+```
+
+O script espera três réplicas. Informe `API_URL` se a porta da primeira instância não for 3000. O resultado inclui um link direto para o trace verificado. Para desenvolvimento fora do Docker, habilite o endpoint OTLP comentado em `.env.example` somente enquanto Jaeger estiver em execução.
+
+### Carga e contabilidade
+
+Consulte as portas efetivas das três instâncias com `docker compose port --index N app 3000` e substitua as URLs abaixo:
+
+```sh
+bun run test:load --urls=http://localhost:3000,http://localhost:3001,http://localhost:3002 --scenario=distributed --requests=600 --concurrency=12 --wallets=12
+bun run test:load --urls=http://localhost:3000,http://localhost:3001,http://localhost:3002 --scenario=hot --requests=600 --concurrency=12
+```
+
+Cada execução cria carteiras novas, inclui duplicatas e confere efeitos únicos, saldo, ledger, journal e resultado histórico dos replays. O script termina com erro se detectar divergência. Os relatórios JSON ficam em `benchmarks/`; a metodologia e os resultados observados estão em [benchmarks/README.md](benchmarks/README.md).
+
+A reconciliação agora inclui `doubleEntry.consistent`, totais exatos de débitos/créditos e quantidade de postings. Cada movimento tem uma entrada no ledger e duas contrapartidas; LOSS e rejeições continuam sem movimentação financeira. A conta de clearing é técnica: não representa uma integração de liquidação bancária.
+
+Para encerrar também a observabilidade:
+
+```sh
+docker compose -f compose.yaml -f compose.observability.yaml down
+```

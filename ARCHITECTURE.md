@@ -88,13 +88,13 @@ Pending-reference acceptance is not a failure. A terminal rejection must not be 
 
 ## Trade-offs and limitations
 
-- Deferred full-ledger reconciliation on balance mutations adds work proportional to wallet history. It is a correctness-first guard for this challenge; a production design would benchmark it and consider an incrementally verifiable accounting design plus independent reconciliation. No throughput/RPS target or benchmark result is claimed.
-- This is a single-wallet signed ledger, not double-entry bookkeeping. There is no cross-wallet transfer or partial reversal.
+- Deferred full-ledger reconciliation on balance mutations adds work proportional to wallet history. It is a correctness-first guard for this challenge; production would require sustained benchmarking and an incrementally verifiable accounting design plus independent reconciliation. Local load experiment results are provided, with no production capacity or RPS target claimed.
+- Each wallet movement also has a balanced double-entry journal: the wallet liability posting and an opposite currency clearing posting. This does not implement cross-wallet transfers, settlement with real bank accounts, revenue recognition or partial reversals.
 - Domain constructors / factories enforce encapsulation; PostgreSQL triggers provide the persistence backstop. The local database user owns its schema for reproducible migrations/tests. Production should separate migration ownership and a least-privilege application role; a superuser can bypass any trigger-based design.
 - Outbox/inbox and terminal records have no automatic retention/deletion policy. This deliberately favors audit and safe replay over bounded disk usage. Production requires retention, archival and backup policy coordinated with provider replay horizons.
 - A failed/rejected transaction is terminal. Recovery is explicit; no administrative endpoint silently rewrites financial history.
 - LocalStack queues are ephemeral in the supplied local stack. SQL outbox state survives process restarts, but a broker data loss **after publication acknowledgement** is outside the process-crash guarantee. Actual AWS SQS supplies broker durability; local persistence or backup is an operational concern.
-- Authentication, OIDC integration, distributed traces, a dashboard, double-entry accounting and load testing are not implemented. Health, metrics, failure codes and correctness/recovery tests are included.
+- Authentication / OIDC integration remains optional and is not implemented. Double-entry journal, distributed tracing, a provisioned dashboard and measured load scenarios are included alongside the original correctness/recovery tests.
 - Dependency versions and images are pinned for reproducibility rather than selected dynamically at startup. CI is provided but a remote CI success is not implied by local runs.
 
 ## Verification
@@ -102,3 +102,25 @@ Pending-reference acceptance is not a failure. A terminal rejection must not be 
 `bun run test:all` runs strict type checking, lint, domain tests and real-container integration tests. The integration runner provisions a fresh database and queue namespace, exercises both migrations in both directions, and cleans only its resources. Three real Bun/NestJS processes handle the same wallet, a worker is killed with SIGKILL at the post-commit/pre-ack boundary, and concurrent publishers use real SQS. Failure injection covers rollback before commit and the uncertain publish/mark window. Mocked financial databases/brokers do not replace the integration environment; adapters are wrapped only to inject targeted failures while the real database and SQS remain in use.
 
 Test wait deadlines use monotonic `performance.now()` so host/VM wall-clock corrections cannot prematurely end recovery assertions. Persisted production schedules independently use the PostgreSQL clock.
+
+## Optional differentiators
+
+### Double-entry journal
+
+Every `WalletLedgerEntry` produces exactly two immutable `journal_postings` in the same unit of work: a wallet liability account (`wallet:<id>`) with the ledger direction and a currency clearing account (`clearing:<currency>`) with the opposite direction. Debits equal credits per movement and per currency. The shared clearing account is an account code, not a mutable global balance row, so it does not create a global wallet lock. OPENING is covered; LOSS and rejected/failed transactions have neither ledger movements nor journal postings.
+
+Migration 003 backfills historical movements without editing the original ledger. Deferred SQL triggers require exactly two equal postings with the expected accounts, currency and sides. Even an otherwise correct SQL update of wallet/transaction/ledger cannot commit without its balanced journal. Journal update/delete/truncate are forbidden. Reconciliation checks both wallet balance and the double-entry totals/count; ledger responses include postings. Cumulative journal totals stay exact PostgreSQL numeric strings and may exceed the range of an individual movement.
+
+### Tracing and dashboard
+
+Tracing is explicitly instrumented with the OpenTelemetry JS SDK on Bun: HTTP route templates, financial units of work, SQS consumers and outbox publication. W3C context is extracted from HTTP/SQS, saved separately in immutable outbox transport metadata, and restored by other publisher processes. SQS publication carries trace headers. Trace/span IDs join application logs; payloads, amounts and raw exceptions are excluded. Handled retry failures mark the active span as failed. This is boundary instrumentation, not a claim that every SQL statement is automatically instrumented.
+
+OTLP export is enabled by `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`; disabled tracing leaves financial behavior unchanged. The optional Compose overlay adds Jaeger, Prometheus and a provisioned Grafana dashboard. Prometheus discovers every app replica via Docker DNS, rather than repeatedly scraping a load-balanced alias as if it were one process. The dashboard aggregates histograms correctly across replicas and shows outcomes, latency percentiles, duplicates, retries, DLQ, lock conflicts, lag, reconciliation, scrape availability and memory. The local Prometheus configuration accepts one minute of out-of-order samples to tolerate VM clock corrections; production clock synchronization remains an operational requirement.
+
+`bun run observability:verify` checks dashboard provisioning, three healthy targets and a real trace spanning HTTP, financial commit, SQS handling and outbox publication. Grafana/Jaeger state is ephemeral in this local demonstration; provisioned configuration is versioned and reproducible.
+
+### Load experiment
+
+`bun run test:load` is a Bun-native closed-loop HTTP generator with bounded concurrency, approximately 10% duplicated requests and fresh wallets per run. Both a distributed-wallet and a single hot-wallet scenario were executed. Results include raw client p50/p95/p99, throughput, error rate, lock conflict deltas and per-replica outbox lag snapshots. After the timed phase, every wallet is checked against expected unique monetary effects, ledger and journal counts, and debit/credit equality. A mismatch gives the script a nonzero exit code.
+
+The experiment measures local end-to-end API latency with instrumentation and SQL guards enabled, not production capacity or an open-loop arrival-rate SLO. Setup and reconciliation are outside the timed phase. Outbox lag is sampled before/after; these samples are not a peak-lag measurement or a proof of broker delivery latency. Zero lock-timeout/deadlock counters do not imply no lock waiting. See `benchmarks/README.md` and the saved JSON reports for environment, methodology and limitations.

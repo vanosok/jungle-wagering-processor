@@ -1,0 +1,170 @@
+{
+  "runId": "c0580cad-827c-4bb2-b6c9-ebca5f449eb9",
+  "startedAt": "2026-11-07T16:34:52.872Z",
+  "environment": {
+    "runtime": "Bun 1.3.11",
+    "os": "win32 10.0.26200",
+    "cpu": "AMD Ryzen 9 5900X 12-Core Processor            ",
+    "logicalCpus": 24,
+    "totalMemoryBytes": 34281943040,
+    "docker": {
+      "version": "29.2.0",
+      "logicalCpus": 24,
+      "memoryBytes": 16727044096,
+      "os": "Docker Desktop"
+    },
+    "note": "Local synthetic closed-loop workload; results depend on Docker resources and instrumentation. No production capacity claim."
+  },
+  "methodology": {
+    "urls": ["http://localhost:3002", "http://localhost:3003", "http://localhost:3004"],
+    "requests": 600,
+    "concurrency": 12,
+    "wallets": 12,
+    "scenario": "distributed",
+    "effectiveWallets": 12,
+    "replicasTargeted": 3,
+    "stake": {
+      "amount": "0.01",
+      "currency": "BRL"
+    },
+    "duplicateEvery": 10,
+    "warmup": "Wallet creation and metrics scrape precede the measured request phase.",
+    "latency": "Client request through full response body; monotonic milliseconds, includes API/DB contention, excludes job scheduling.",
+    "financialChecks": "Expected unique effects, original replay snapshots, wallet=ledger, debit=credit and exactly two postings per movement."
+  },
+  "results": {
+    "requests": 600,
+    "uniqueExpected": 541,
+    "replays": 59,
+    "durationSeconds": 4.2298427,
+    "requestsPerSecond": 141.8492465452675,
+    "errors": 0,
+    "errorRate": 0,
+    "latencyMs": {
+      "p50": 77.64679999999953,
+      "p95": 151.90940000000023,
+      "p99": 183.0532000000003,
+      "max": 227.38200000000006
+    },
+    "statusCounts": {
+      "200": 600
+    },
+    "metricsBefore": [
+      {
+        "url": "http://localhost:3002",
+        "available": true,
+        "lockConflicts": 0,
+        "outboxLagSeconds": 0
+      },
+      {
+        "url": "http://localhost:3003",
+        "available": true,
+        "lockConflicts": 0,
+        "outboxLagSeconds": 0.098754
+      },
+      {
+        "url": "http://localhost:3004",
+        "available": true,
+        "lockConflicts": 0,
+        "outboxLagSeconds": 0.11847
+      }
+    ],
+    "metricsAfter": [
+      {
+        "url": "http://localhost:3002",
+        "available": true,
+        "lockConflicts": 0,
+        "outboxLagSeconds": 1.361571
+      },
+      {
+        "url": "http://localhost:3003",
+        "available": true,
+        "lockConflicts": 0,
+        "outboxLagSeconds": 1.374389
+      },
+      {
+        "url": "http://localhost:3004",
+        "available": true,
+        "lockConflicts": 0,
+        "outboxLagSeconds": 1.359073
+      }
+    ],
+    "lockConflictsDuringRun": 0,
+    "reconciliations": [
+      {
+        "walletId": "8cf58e69-1e59-4ecd-89d4-2eb44b4e87f2",
+        "consistent": true,
+        "checkedEntries": 42,
+        "checkedPostings": 84
+      },
+      {
+        "walletId": "951e3bbb-e8f2-4e69-9e3d-e525e54c7ce6",
+        "consistent": true,
+        "checkedEntries": 51,
+        "checkedPostings": 102
+      },
+      {
+        "walletId": "43b8cca1-f6ee-4565-b317-aa2e98a4db43",
+        "consistent": true,
+        "checkedEntries": 41,
+        "checkedPostings": 82
+      },
+      {
+        "walletId": "1878ef46-b29a-4714-8094-334b297b62c3",
+        "consistent": true,
+        "checkedEntries": 51,
+        "checkedPostings": 102
+      },
+      {
+        "walletId": "f54bc95d-aa27-4400-8d9d-1a441eacf870",
+        "consistent": true,
+        "checkedEntries": 41,
+        "checkedPostings": 82
+      },
+      {
+        "walletId": "e15c27ff-325b-45b5-95bd-1652566125d2",
+        "consistent": true,
+        "checkedEntries": 51,
+        "checkedPostings": 102
+      },
+      {
+        "walletId": "f501f2b6-1c5d-489a-b0a6-648d9e67f3d6",
+        "consistent": true,
+        "checkedEntries": 41,
+        "checkedPostings": 82
+      },
+      {
+        "walletId": "6cc6c9de-fdb3-49ea-b99a-b09b73ac6687",
+        "consistent": true,
+        "checkedEntries": 51,
+        "checkedPostings": 102
+      },
+      {
+        "walletId": "ef767cb4-6f9c-4391-b165-7ea24e90b908",
+        "consistent": true,
+        "checkedEntries": 41,
+        "checkedPostings": 82
+      },
+      {
+        "walletId": "18d75a45-2875-49d2-b08f-436987c3d225",
+        "consistent": true,
+        "checkedEntries": 51,
+        "checkedPostings": 102
+      },
+      {
+        "walletId": "0a294b55-66e3-4ee6-85a6-3c2e796aeeef",
+        "consistent": true,
+        "checkedEntries": 41,
+        "checkedPostings": 82
+      },
+      {
+        "walletId": "3f0dc1e0-7852-4eeb-ba13-ef3ed8150a2a",
+        "consistent": true,
+        "checkedEntries": 51,
+        "checkedPostings": 102
+      }
+    ],
+    "violations": [],
+    "passed": true
+  }
+}
