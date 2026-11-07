@@ -11,6 +11,7 @@ import type { WageringService } from '../../application/wagering';
 import { config } from '../../config';
 import { DomainError } from '../../domain/errors';
 import { errorCode, log, metrics } from '../observability';
+import { traceContext, traced, traceFailure } from '../telemetry';
 import type { SqsBroker } from './sqs';
 
 export class SqsConsumer {
@@ -38,6 +39,7 @@ export class SqsConsumer {
         WaitTimeSeconds: waitSeconds,
         VisibilityTimeout: config.SQS_VISIBILITY_SECONDS,
         MessageSystemAttributeNames: ['ApproximateReceiveCount', 'MessageGroupId'],
+        MessageAttributeNames: ['traceparent', 'tracestate'],
       }),
       { abortSignal: this.receiveAbort.signal },
     );
@@ -61,6 +63,19 @@ export class SqsConsumer {
   }
 
   private async handle(url: string, message: Message): Promise<void> {
+    const carrier = Object.fromEntries(
+      Object.entries(message.MessageAttributes ?? {})
+        .filter(([, value]) => typeof value.StringValue === 'string')
+        .map(([key, value]) => [key, value.StringValue as string]),
+    );
+    return traced(
+      'sqs.process',
+      () => this.process(url, message),
+      { 'messaging.system': 'aws_sqs', 'messaging.message.id': message.MessageId ?? 'unknown' },
+      traceContext(carrier),
+    );
+  }
+  private async process(url: string, message: Message): Promise<void> {
     const handle = message.ReceiptHandle;
     if (!handle) return;
     this.active.set(handle, url);
@@ -110,6 +125,7 @@ export class SqsConsumer {
         new DeleteMessageCommand({ QueueUrl: url, ReceiptHandle: handle }),
       );
     } catch (error) {
+      traceFailure(error);
       const count = Number(message.Attributes?.ApproximateReceiveCount ?? '1');
       const permanent = error instanceof DomainError || error instanceof SyntaxError;
       if (permanent || count >= config.SQS_MAX_RECEIVES) {

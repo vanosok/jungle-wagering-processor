@@ -3,7 +3,7 @@ import { DomainError } from '../../domain/errors';
 import { Money } from '../../domain/money';
 import { log, metrics } from '../observability';
 import type { Database } from './database';
-import { LedgerRow, TransactionRow, WalletRow } from './entities';
+import { LedgerRow, PostingRow, TransactionRow, WalletRow } from './entities';
 import { toTransaction } from './store';
 
 export class Queries {
@@ -86,6 +86,9 @@ export class Queries {
         { orderBy: { walletVersion: 'asc' }, limit: limit + 1 },
       );
     const page = rows.slice(0, limit);
+    const postings = page.length
+      ? await this.db.em.fork().find(PostingRow, { ledgerId: { $in: page.map((row) => row.id) } })
+      : [];
     const last = page.at(-1);
     return {
       entries: page.map((row) => ({
@@ -97,6 +100,13 @@ export class Queries {
         balanceAfter: { amount: row.balanceAfter, currency: row.currency },
         walletVersion: row.walletVersion,
         createdAt: row.createdAt.toISOString(),
+        postings: postings
+          .filter((posting) => posting.ledgerId === row.id)
+          .map((posting) => ({
+            account: posting.account,
+            side: posting.side,
+            money: { amount: posting.amount, currency: posting.currency },
+          })),
       })),
       nextCursor:
         rows.length > limit && last
@@ -108,20 +118,34 @@ export class Queries {
   }
   async reconcile(walletId: string, correlationId: string) {
     // A single PostgreSQL statement reads balance and ledger from the same MVCC snapshot.
-    const [row] = await this.db.em
-      .fork()
-      .execute<{ currency: string; stored: string; calculated: string; count: string }[]>(
-        `
+    const [row] = await this.db.em.fork().execute<
+      {
+        currency: string;
+        stored: string;
+        calculated: string;
+        count: string;
+        postings: string;
+        debits: string;
+        credits: string;
+      }[]
+    >(
+      `
       SELECT w.currency, w.balance::text AS stored,
       COALESCE(SUM(CASE l.direction WHEN 'CREDIT' THEN l.amount ELSE -l.amount END),0)::numeric(20,2)::text AS calculated,
-      COUNT(l.id)::text AS count FROM wallets w LEFT JOIN wallet_ledger l ON l.wallet_id = w.id
+      COUNT(l.id)::text AS count,
+      (SELECT count(*)::text FROM journal_postings p JOIN wallet_ledger m ON m.id = p.ledger_id WHERE m.wallet_id = w.id) AS postings,
+      (SELECT COALESCE(sum(p.amount),0.00)::text FROM journal_postings p JOIN wallet_ledger m ON m.id = p.ledger_id WHERE m.wallet_id = w.id AND p.side = 'DEBIT') AS debits,
+      (SELECT COALESCE(sum(p.amount),0.00)::text FROM journal_postings p JOIN wallet_ledger m ON m.id = p.ledger_id WHERE m.wallet_id = w.id AND p.side = 'CREDIT') AS credits
+      FROM wallets w LEFT JOIN wallet_ledger l ON l.wallet_id = w.id
       WHERE w.id = ? GROUP BY w.id`,
-        [walletId],
-      );
+      [walletId],
+    );
     if (!row) throw new DomainError('NOT_FOUND', 'Wallet not found');
     const stored = Money.rehydrate({ amount: row.stored, currency: row.currency });
     const calculated = Money.rehydrate({ amount: row.calculated, currency: row.currency });
-    const consistent = stored.equals(calculated);
+    const journalConsistent =
+      row.debits === row.credits && BigInt(row.postings) === 2n * BigInt(row.count);
+    const consistent = stored.equals(calculated) && journalConsistent;
     if (!consistent) {
       metrics.reconciliation.inc();
       log('error', 'reconciliation_mismatch', { walletId, correlationId });
@@ -133,6 +157,12 @@ export class Queries {
       difference: stored.subtract(calculated).toJSON(),
       consistent,
       checkedEntries: Number(row.count),
+      doubleEntry: {
+        consistent: journalConsistent,
+        checkedPostings: Number(row.postings),
+        debits: { amount: row.debits, currency: row.currency },
+        credits: { amount: row.credits, currency: row.currency },
+      },
     };
   }
 }

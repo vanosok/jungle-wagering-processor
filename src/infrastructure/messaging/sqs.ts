@@ -8,6 +8,7 @@ import {
 } from '@aws-sdk/client-sqs';
 import type { BrokerPort } from '../../application/ports';
 import { config } from '../../config';
+import { traceCarrier } from '../telemetry';
 
 export const queueNames = {
   requests: 'wager-transactions.fifo',
@@ -88,6 +89,12 @@ export class SqsBroker implements BrokerPort {
         MessageBody: JSON.stringify(payload),
         MessageGroupId: aggregateId,
         MessageDeduplicationId: eventId,
+        MessageAttributes: Object.fromEntries(
+          Object.entries(traceCarrier()).map(([key, value]) => [
+            key,
+            { DataType: 'String', StringValue: value },
+          ]),
+        ),
       }),
     );
   }

@@ -11,14 +11,17 @@ import {
   RUNTIME,
   type Runtime,
 } from './http/api';
+import { TracingInterceptor } from './http/tracing';
 import { connectDatabase } from './infrastructure/database/database';
 import { Queries } from './infrastructure/database/queries';
 import { PostgresFinancialStore } from './infrastructure/database/store';
 import { SqsBroker } from './infrastructure/messaging/sqs';
 import { errorCode, log } from './infrastructure/observability';
+import { startTelemetry, stopTelemetry } from './infrastructure/telemetry';
 import { Workers } from './infrastructure/workers';
 
 export async function bootstrap(port = config.PORT, enableWorkers = config.WORKERS_ENABLED) {
+  startTelemetry();
   const db = await connectDatabase();
   const broker = new SqsBroker();
   const service = new WageringService(new PostgresFinancialStore(db));
@@ -37,6 +40,7 @@ export async function bootstrap(port = config.PORT, enableWorkers = config.WORKE
   class AppModule {}
   const app = await NestFactory.create(AppModule, { logger: false });
   app.useGlobalFilters(new ApiExceptionFilter());
+  app.useGlobalInterceptors(new TracingInterceptor());
   await app.listen(port, '0.0.0.0');
   const workers = new Workers(db, broker, service);
   if (enableWorkers) workers.start();
@@ -51,6 +55,7 @@ export async function bootstrap(port = config.PORT, enableWorkers = config.WORKE
     await app.close();
     broker.close();
     await db.close(true);
+    await stopTelemetry();
   };
   return {
     app,

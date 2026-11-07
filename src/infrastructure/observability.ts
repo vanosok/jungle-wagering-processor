@@ -1,3 +1,4 @@
+import { trace } from '@opentelemetry/api';
 import { Counter, collectDefaultMetrics, Gauge, Histogram, Registry } from 'prom-client';
 import { config } from '../config';
 
@@ -65,7 +66,14 @@ export function log(
   } = {},
 ): void {
   if (config.LOG_LEVEL === 'silent' || (config.LOG_LEVEL === 'error' && level === 'info')) return;
-  const line = JSON.stringify({ timestamp: new Date().toISOString(), level, event, ...context });
+  const span = trace.getActiveSpan()?.spanContext();
+  const line = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    event,
+    ...context,
+    ...(span ? { traceId: span.traceId, spanId: span.spanId } : {}),
+  });
   if (level === 'error') console.error(line);
   else console.log(line);
 }

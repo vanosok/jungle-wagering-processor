@@ -2,8 +2,10 @@ import type { BrokerPort } from '../../application/ports';
 import { OutboxMessage } from '../../domain/messages';
 import type { Database } from '../database/database';
 import { errorCode, log, metrics } from '../observability';
+import { traceContext, traced, traceFailure } from '../telemetry';
 
 interface ClaimedEvent {
+  trace_context: Record<string, string>;
   id: string;
   aggregate_id: string;
   event_type: string;
@@ -32,7 +34,16 @@ export class OutboxPublisher {
       FROM candidates c WHERE o.id = c.id RETURNING o.*`,
       [this.owner],
     );
-    await Promise.all(rows.map((row) => this.publish(row)));
+    await Promise.all(
+      rows.map((row) =>
+        traced(
+          'outbox.publish',
+          () => this.publish(row),
+          { 'messaging.system': 'aws_sqs', 'messaging.message.id': row.id },
+          traceContext(row.trace_context),
+        ),
+      ),
+    );
     const [lag] = await this.db.em.fork().execute<{ seconds: string }[]>(`
       SELECT COALESCE(EXTRACT(EPOCH FROM now() - MIN(enqueued_at)),0)::text AS seconds
       FROM outbox WHERE published_at IS NULL`);
@@ -49,6 +60,7 @@ export class OutboxPublisher {
         [row.id, this.owner],
       );
     } catch (error) {
+      traceFailure(error);
       const message = OutboxMessage.rehydrate({
         id: row.id,
         aggregateId: row.aggregate_id,

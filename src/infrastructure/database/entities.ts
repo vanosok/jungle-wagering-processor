@@ -58,6 +58,7 @@ export class InboxRow {
   processedAt!: Date;
 }
 export class OutboxRow {
+  traceContext: Record<string, string> = {};
   id!: string;
   aggregateId!: string;
   eventType!: string;
@@ -68,6 +69,14 @@ export class OutboxRow {
   publishedAt: Date | null = null;
   leaseOwner: string | null = null;
   leaseUntil: Date | null = null;
+}
+export class PostingRow {
+  id!: string;
+  ledgerId!: string;
+  account!: string;
+  side!: LedgerDirection;
+  amount!: string;
+  currency!: string;
 }
 
 const id = { type: 'uuid', primary: true } as const;
@@ -149,6 +158,7 @@ export const OutboxSchema = new EntitySchema({
   class: OutboxRow,
   tableName: 'outbox',
   properties: {
+    traceContext: { type: 'json' },
     id,
     aggregateId: { type: 'uuid' },
     eventType: text,
@@ -161,4 +171,23 @@ export const OutboxSchema = new EntitySchema({
     leaseUntil: { ...timestamp, nullable: true },
   },
 });
-export const entities = [WalletSchema, TransactionSchema, LedgerSchema, InboxSchema, OutboxSchema];
+export const PostingSchema = new EntitySchema({
+  class: PostingRow,
+  tableName: 'journal_postings',
+  properties: {
+    id,
+    ledgerId: { type: 'uuid' },
+    account: text,
+    side: text,
+    amount: money,
+    currency: text,
+  },
+});
+export const entities = [
+  WalletSchema,
+  TransactionSchema,
+  LedgerSchema,
+  InboxSchema,
+  OutboxSchema,
+  PostingSchema,
+];

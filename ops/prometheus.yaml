@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+storage:
+  tsdb:
+    out_of_order_time_window: 1m
+scrape_configs:
+  - job_name: wagering
+    dns_sd_configs:
+      - names: [app]
+        type: A
+        port: 3000
+        refresh_interval: 5s

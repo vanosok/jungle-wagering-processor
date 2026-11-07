@@ -2,14 +2,16 @@ import { LockMode } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type { FinancialSession, FinancialStore, TransactionRecord } from '../../application/ports';
 import type { IntegrationEvent } from '../../domain/events';
+import { Journal } from '../../domain/journal';
 import type { WalletLedgerEntry } from '../../domain/ledger';
 import { InboxMessage, OutboxMessage } from '../../domain/messages';
 import { Money } from '../../domain/money';
 import { WagerTransaction } from '../../domain/transaction';
 import { Wallet } from '../../domain/wallet';
 import { errorCode, metrics } from '../observability';
+import { traceCarrier, traced } from '../telemetry';
 import type { Database } from './database';
-import { InboxRow, LedgerRow, OutboxRow, TransactionRow, WalletRow } from './entities';
+import { InboxRow, LedgerRow, OutboxRow, PostingRow, TransactionRow, WalletRow } from './entities';
 
 export function toTransaction(row: TransactionRow): TransactionRecord {
   return {
@@ -130,6 +132,18 @@ class Session implements FinancialSession {
     );
   }
   insertLedger(entry: WalletLedgerEntry): void {
+    for (const posting of Journal.from(entry).postings) {
+      this.em.persist(
+        this.em.create(PostingRow, {
+          id: crypto.randomUUID(),
+          ledgerId: entry.id,
+          account: posting.account,
+          side: posting.side,
+          amount: posting.money.toString(),
+          currency: posting.money.currency,
+        }),
+      );
+    }
     this.em.persist(
       this.em.create(LedgerRow, {
         id: entry.id,
@@ -152,6 +166,7 @@ class Session implements FinancialSession {
         id: event.eventId,
         aggregateId: event.aggregateId,
         eventType: event.eventType,
+        traceContext: traceCarrier(),
         payload: event.toJSON(),
         occurredAt: event.occurredAt,
         attempts: message.attempts,
@@ -196,6 +211,11 @@ class Session implements FinancialSession {
 export class PostgresFinancialStore implements FinancialStore {
   constructor(private readonly db: Database) {}
   async atomic<T>(work: (session: FinancialSession) => Promise<T>): Promise<T> {
+    return traced('postgres.financial_transaction', () => this.execute(work), {
+      'db.system.name': 'postgresql',
+    });
+  }
+  private async execute<T>(work: (session: FinancialSession) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.db.em.fork().transactional(async (em) => {

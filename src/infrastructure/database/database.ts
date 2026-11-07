@@ -5,6 +5,7 @@ import { config } from '../../config';
 import { entities } from './entities';
 import { Migration202611070001 } from './migrations/Migration202611070001';
 import { Migration202611070002 } from './migrations/Migration202611070002';
+import { Migration202611070003 } from './migrations/Migration202611070003';
 
 export async function connectDatabase(url = config.DATABASE_URL) {
   return MikroORM.init({
@@ -12,7 +13,7 @@ export async function connectDatabase(url = config.DATABASE_URL) {
     entities,
     extensions: [Migrator],
     migrations: {
-      migrationsList: [Migration202611070001, Migration202611070002],
+      migrationsList: [Migration202611070001, Migration202611070002, Migration202611070003],
       transactional: true,
       allOrNothing: true,
     },
