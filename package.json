@@ -1,0 +1,40 @@
+{
+  "name": "jungle-wagering-processor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Distributed wagering processor — Jungle Gaming technical challenge",
+  "packageManager": "bun@1.3.11",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "dev": "bun --watch src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "bun test tests/unit",
+    "test:integration": "bun test --timeout 120000 tests/integration",
+    "test:all": "bun run typecheck && bun run lint && bun run test && bun run test:integration",
+    "db:migrate": "bun scripts/migrate.ts up",
+    "db:rollback": "bun scripts/migrate.ts down",
+    "queues:init": "bun scripts/queues.ts",
+    "demo": "bun scripts/demo.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "3.922.0",
+    "@mikro-orm/core": "6.6.0",
+    "@mikro-orm/migrations": "6.6.0",
+    "@mikro-orm/postgresql": "6.6.0",
+    "@nestjs/common": "11.1.8",
+    "@nestjs/core": "11.1.8",
+    "@nestjs/platform-express": "11.1.8",
+    "prom-client": "15.1.3",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.4",
+    "@types/bun": "1.3.2",
+    "@types/express": "5.0.5",
+    "typescript": "5.9.3"
+  }
+}
